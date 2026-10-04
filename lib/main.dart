@@ -1,22 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dashboard_screen.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+void main() async {
+  // Khởi tạo binding trước khi chạy các tác vụ bất đồng bộ SQLite
+  WidgetsFlutterBinding.ensureInitialized();
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Quản lý thu chi',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: const DashboardScreen(),
-    );
-  }
+  runApp(const MaterialApp(
+    debugShowCheckedModeBanner: false,
+    home: DashboardScreen(),
+  ));
 }
