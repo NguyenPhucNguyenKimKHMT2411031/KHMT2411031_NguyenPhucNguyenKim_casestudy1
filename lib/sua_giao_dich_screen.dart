@@ -1,21 +1,153 @@
 import 'package:flutter/material.dart';
+import 'models/transaction.dart';
+import 'repositories/transaction_repository.dart';
 
 class SuaGiaoDichScreen extends StatefulWidget {
-  const SuaGiaoDichScreen({super.key});
+  final Transaction transaction;
+
+  const SuaGiaoDichScreen({super.key, required this.transaction});
 
   @override
   State<SuaGiaoDichScreen> createState() => _SuaGiaoDichScreenState();
 }
 
 class _SuaGiaoDichScreenState extends State<SuaGiaoDichScreen> {
-  bool isExpense = true;
-  final List<String> categories = ['Ăn uống', 'Thu nhập', 'Chi tiêu', 'Tất cả danh mục'];
-  String selectedCategory = 'Ăn uống';
+  final TransactionRepository _repository = TransactionRepository();
 
-  // Điền sẵn thông tin giao dịch cần sửa
-  final TextEditingController amountController = TextEditingController(text: '100.000');
-  final TextEditingController dateController = TextEditingController(text: '12/04/2025');
-  final TextEditingController noteController = TextEditingController(text: 'Ăn trưa');
+  late bool isExpense;
+  final List<String> categories = ['Ăn uống', 'Mua sắm', 'Di chuyển', 'Giải trí', 'Hóa đơn', 'Thu nhập'];
+  late String selectedCategory;
+
+  late TextEditingController amountController;
+  late TextEditingController dateController;
+  late TextEditingController noteController;
+
+  @override
+  void initState() {
+    super.initState();
+    // Ưu tiên kiểm tra thuộc tính type
+    isExpense = widget.transaction.type == 'expense' ||
+        (widget.transaction.type.isEmpty && widget.transaction.category != 'Thu nhập');
+
+    selectedCategory = categories.contains(widget.transaction.category)
+        ? widget.transaction.category
+        : categories.first;
+
+    amountController = TextEditingController(text: widget.transaction.amount.toStringAsFixed(0));
+    dateController = TextEditingController(text: widget.transaction.date);
+    noteController = TextEditingController(text: widget.transaction.title);
+  }
+
+  @override
+  void dispose() {
+    amountController.dispose();
+    dateController.dispose();
+    noteController.dispose();
+    super.dispose();
+  }
+
+  // 1. Cập nhật giao dịch có try-catch bắt lỗi
+  Future<void> _updateTransaction() async {
+    final titleText = noteController.text.trim();
+    final amountText = amountController.text.trim();
+
+    if (titleText.isEmpty || amountText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập đầy đủ thông tin!')),
+      );
+      return;
+    }
+
+    final double? parsedAmount = double.tryParse(amountText.replaceAll('.', '').replaceAll(',', ''));
+    if (parsedAmount == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Số tiền nhập vào không hợp lệ!')),
+      );
+      return;
+    }
+
+    final updatedTransaction = Transaction(
+      id: widget.transaction.id,
+      title: titleText,
+      amount: parsedAmount,
+      date: dateController.text,
+      category: isExpense ? selectedCategory : 'Thu nhập',
+      type: isExpense ? 'expense' : 'income',
+    );
+
+    try {
+      if (widget.transaction.id != null) {
+        await _repository.updateTransaction(updatedTransaction);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cập nhật giao dịch thành công!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context, true); // Trả về true để làm mới Dashboard
+        }
+      }
+    } catch (e) {
+      debugPrint("Lỗi cập nhật giao dịch: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi khi cập nhật: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // 2. Xóa giao dịch có try-catch bắt lỗi
+  Future<void> _deleteTransaction() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xác nhận xóa'),
+        content: const Text('Bạn có chắc chắn muốn xóa giao dịch này?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xóa', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && widget.transaction.id != null) {
+      try {
+        await _repository.deleteTransaction(widget.transaction.id!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Đã xóa giao dịch!'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          Navigator.pop(context, true); // Trả về true để làm mới Dashboard
+        }
+      } catch (e) {
+        debugPrint("Lỗi xóa giao dịch: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Lỗi khi xóa: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,13 +157,19 @@ class _SuaGiaoDichScreenState extends State<SuaGiaoDichScreen> {
         backgroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-          onPressed: () {},
+          onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Sửa giao dịch',
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            onPressed: _deleteTransaction,
+          ),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -89,7 +227,7 @@ class _SuaGiaoDichScreenState extends State<SuaGiaoDichScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Số tiền (Đã có sẵn 100.000)
+              // Số tiền
               TextField(
                 controller: amountController,
                 keyboardType: TextInputType.number,
@@ -128,7 +266,7 @@ class _SuaGiaoDichScreenState extends State<SuaGiaoDichScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Ghi chú (Đã có sẵn Ăn trưa)
+              // Ghi chú
               TextField(
                 controller: noteController,
                 decoration: InputDecoration(
@@ -140,7 +278,7 @@ class _SuaGiaoDichScreenState extends State<SuaGiaoDichScreen> {
 
               const Spacer(),
 
-              // Nút Lưu
+              // Nút Lưu cập nhật
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -149,8 +287,8 @@ class _SuaGiaoDichScreenState extends State<SuaGiaoDichScreen> {
                     backgroundColor: const Color(0xFF1E88E5),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  onPressed: () {},
-                  child: const Text('Lưu', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                  onPressed: _updateTransaction,
+                  child: const Text('Lưu thay đổi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                 ),
               ),
             ],
