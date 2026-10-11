@@ -1,27 +1,103 @@
 import 'package:flutter/material.dart';
+import 'models/transaction.dart';
+import 'repositories/transaction_repository.dart';
 import 'filter_screen.dart';
-// Đảm bảo bạn đã có file filter_screen.dart trong thư mục lib
+import 'sua_giao_dich_screen.dart';
 
-class TransactionListScreen extends StatelessWidget {
-  // Đã sửa lại constructor để tránh lỗi const/super cũ
-  TransactionListScreen({Key? key}) : super(key: key);
+class TransactionListScreen extends StatefulWidget {
+  const TransactionListScreen({Key? key}) : super(key: key);
+
+  @override
+  State<TransactionListScreen> createState() => _TransactionListScreenState();
+}
+
+class _TransactionListScreenState extends State<TransactionListScreen> {
+  final TransactionRepository _repository = TransactionRepository();
+  List<Transaction> _allTransactions = [];
+  bool _isLoading = true;
+
+  // Biến lưu trạng thái lọc: 'all', 'income', 'expense'
+  String _selectedFilter = 'all';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final transactions = await _repository.getTransactions();
+      if (mounted) {
+        setState(() {
+          _allTransactions = transactions;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _navigateToEdit(Transaction transaction) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SuaGiaoDichScreen(transaction: transaction),
+      ),
+    );
+    if (result == true) {
+      _loadData(); // Tải lại danh sách sau khi sửa hoặc xóa
+    }
+  }
+
+  IconData _getCategoryIcon(String category) {
+    switch (category) {
+      case 'Ăn uống': return Icons.restaurant;
+      case 'Mua sắm': return Icons.shopping_bag;
+      case 'Di chuyển': return Icons.directions_car;
+      case 'Giải trí': return Icons.sports_esports;
+      case 'Hóa đơn': return Icons.receipt;
+      case 'Thu nhập': return Icons.work;
+      default: return Icons.category;
+    }
+  }
+
+  Color _getCategoryColor(String category) {
+    switch (category) {
+      case 'Ăn uống': return Colors.pink;
+      case 'Mua sắm': return Colors.cyan;
+      case 'Di chuyển': return Colors.deepPurple;
+      case 'Giải trí': return Colors.orange;
+      case 'Hóa đơn': return Colors.redAccent;
+      case 'Thu nhập': return Colors.green;
+      default: return Colors.blue;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Lọc danh sách dựa trên nút được chọn
+    List<Transaction> filteredList = _allTransactions;
+    if (_selectedFilter == 'income') {
+      filteredList = _allTransactions.where((t) => t.type == 'income').toList();
+    } else if (_selectedFilter == 'expense') {
+      filteredList = _allTransactions.where((t) => t.type == 'expense').toList();
+    }
+
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('Giao dịch', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
-        elevation: 0.5,
+        elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.search, color: Colors.black),
-            onPressed: () {},
-          ),
           IconButton(
             icon: const Icon(Icons.filter_list, color: Colors.black),
             onPressed: () {
-              // Chuyển hướng sang màn hình Lọc dữ liệu
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const FilterScreen()),
@@ -32,91 +108,155 @@ class TransactionListScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
+          // 1. Thanh tìm kiếm
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Tìm kiếm giao dịch...',
+                hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+                prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                filled: true,
+                fillColor: Colors.grey[100],
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30.0),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+
+          // 2. Các nút bộ lọc nhanh có gắn sự kiện chuyển đổi trạng thái
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Row(
               children: [
                 Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                  child: _selectedFilter == 'all'
+                      ? ElevatedButton(
+                    onPressed: () => setState(() => _selectedFilter = 'all'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
                     child: const Text('Tất cả', style: TextStyle(color: Colors.white)),
+                  )
+                      : OutlinedButton(
+                    onPressed: () => setState(() => _selectedFilter = 'all'),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.grey.shade300),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                    child: const Text('Tất cả', style: TextStyle(color: Colors.black54)),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {},
-                    child: const Text('Thu nhập', style: TextStyle(color: Colors.black)),
+                  child: _selectedFilter == 'income'
+                      ? ElevatedButton(
+                    onPressed: () => setState(() => _selectedFilter = 'income'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                    child: const Text('Thu nhập', style: TextStyle(color: Colors.white)),
+                  )
+                      : OutlinedButton(
+                    onPressed: () => setState(() => _selectedFilter = 'income'),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.grey.shade300),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                    child: const Text('Thu nhập', style: TextStyle(color: Colors.black54)),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {},
-                    child: const Text('Chi tiêu', style: TextStyle(color: Colors.black)),
+                  child: _selectedFilter == 'expense'
+                      ? ElevatedButton(
+                    onPressed: () => setState(() => _selectedFilter = 'expense'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                    child: const Text('Chi tiêu', style: TextStyle(color: Colors.white)),
+                  )
+                      : OutlinedButton(
+                    onPressed: () => setState(() => _selectedFilter = 'expense'),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.grey.shade300),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                    child: const Text('Chi tiêu', style: TextStyle(color: Colors.black54)),
                   ),
                 ),
               ],
             ),
           ),
+
+          // 3. Danh sách giao dịch hiển thị theo bộ lọc
           Expanded(
-            child: ListView(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : filteredList.isEmpty
+                ? const Center(
+              child: Text(
+                'Không có giao dịch nào phù hợp.',
+                style: TextStyle(color: Colors.grey, fontSize: 14),
+              ),
+            )
+                : ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              children: const [
-                TransactionTile(icon: Icons.restaurant, iconBgColor: Colors.orange, title: 'Ăn uống', date: '12/04/2025', amount: '-100.000 đ', isExpense: true),
-                TransactionTile(icon: Icons.shopping_bag, iconBgColor: Colors.pink, title: 'Mua sắm', date: '11/04/2025', amount: '-500.000 đ', isExpense: true),
-                TransactionTile(icon: Icons.account_balance_wallet, iconBgColor: Colors.green, title: 'Lương', date: '10/04/2025', amount: '+10.000.000 đ', isExpense: false),
-                TransactionTile(icon: Icons.directions_car, iconBgColor: Colors.purple, title: 'Đi lại', date: '09/04/2025', amount: '-200.000 đ', isExpense: true),
-                TransactionTile(icon: Icons.school, iconBgColor: Colors.blue, title: 'Học tập', date: '07/04/2025', amount: '-300.000 đ', isExpense: true),
-              ],
+              itemCount: filteredList.length,
+              itemBuilder: (context, index) {
+                final item = filteredList[index];
+                final isIncome = item.type == 'income';
+                final categoryColor = _getCategoryColor(item.category);
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  elevation: 0,
+                  color: Colors.grey[50],
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: ListTile(
+                    onTap: () => _navigateToEdit(item),
+                    leading: CircleAvatar(
+                      backgroundColor: categoryColor.withOpacity(0.15),
+                      child: Icon(_getCategoryIcon(item.category), color: categoryColor),
+                    ),
+                    title: Text(
+                      item.title.isNotEmpty ? item.title : item.category,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    subtitle: Text(
+                      '${item.category} • ${item.date}',
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${isIncome ? '+' : '-'}${item.amount.toStringAsFixed(0)} đ',
+                          style: TextStyle(
+                            color: isIncome ? Colors.green[700] : Colors.red[700],
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 18),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class TransactionTile extends StatelessWidget {
-  final IconData icon;
-  final Color iconBgColor;
-  final String title;
-  final String date;
-  final String amount;
-  final bool isExpense;
-
-  const TransactionTile({
-    Key? key,
-    required this.icon,
-    required this.iconBgColor,
-    required this.title,
-    required this.date,
-    required this.amount,
-    required this.isExpense,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      elevation: 0.5,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: iconBgColor.withOpacity(0.15),
-          child: Icon(icon, color: iconBgColor),
-        ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(date, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-        trailing: Text(
-          amount,
-          style: TextStyle(
-            color: isExpense ? Colors.red : Colors.green,
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-          ),
-        ),
       ),
     );
   }

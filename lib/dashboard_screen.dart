@@ -147,17 +147,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         shape: const CircleBorder(),
         child: const Icon(Icons.add, color: Colors.white, size: 28),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
-          BottomNavigationBarItem(icon: Icon(Icons.article_outlined), label: 'Giao dịch'),
-          BottomNavigationBarItem(icon: Icon(Icons.pie_chart_outline), label: 'Thống kê'),
-        ],
-      ),
+
     );
   }
 
