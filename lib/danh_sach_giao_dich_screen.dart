@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'models/transaction.dart';
 import 'repositories/transaction_repository.dart';
-import 'filter_screen.dart';
 import 'sua_giao_dich_screen.dart';
+import 'filter_screen.dart';
 
 class TransactionListScreen extends StatefulWidget {
-  const TransactionListScreen({Key? key}) : super(key: key);
+  const TransactionListScreen({super.key});
 
   @override
   State<TransactionListScreen> createState() => _TransactionListScreenState();
@@ -16,85 +16,123 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
   List<Transaction> _allTransactions = [];
   bool _isLoading = true;
 
-  // Biến lưu trạng thái lọc: 'all', 'income', 'expense'
+  // Trạng thái bộ lọc tab: 'all', 'income', 'expense'
   String _selectedFilter = 'all';
+  // Trạng thái tìm kiếm
+  bool _isSearching = false;
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadTransactions();
   }
 
-  Future<void> _loadData() async {
+  // Hàm định dạng số tiền có dấu chấm ngăn cách hàng nghìn
+  String _formatCurrency(double amount) {
+    String str = amount.toStringAsFixed(0);
+    return str.replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]}.',
+    );
+  }
+
+  Future<void> _loadTransactions() async {
     setState(() => _isLoading = true);
     try {
-      final transactions = await _repository.getTransactions();
+      final list = await _repository.getTransactions();
       if (mounted) {
         setState(() {
-          _allTransactions = transactions;
-          _isLoading = false;
+          _allTransactions = list;
         });
       }
     } catch (e) {
+      debugPrint("Lỗi tải danh sách: $e");
+    } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
   }
 
-  Future<void> _navigateToEdit(Transaction transaction) async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => SuaGiaoDichScreen(transaction: transaction),
-      ),
-    );
-    if (result == true) {
-      _loadData(); // Tải lại danh sách sau khi sửa hoặc xóa
+  // Lọc danh sách theo Tab (Tất cả / Thu / Chi) và từ khóa tìm kiếm
+  List<Transaction> get _filteredTransactions {
+    return _allTransactions.where((item) {
+      final matchesTab = _selectedFilter == 'all' || item.type == _selectedFilter;
+      final matchesSearch = item.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          item.category.toLowerCase().contains(_searchQuery.toLowerCase());
+      return matchesTab && matchesSearch;
+    }).toList();
+  }
+
+  // Chọn icon và màu sắc tương ứng theo danh mục
+  IconData _getCategoryIcon(String category, bool isExpense) {
+    switch (category.toLowerCase()) {
+      case 'ăn uống':
+        return Icons.restaurant;
+      case 'mua sắm':
+        return Icons.shopping_bag;
+      case 'đi lại':
+        return Icons.directions_car;
+      case 'học tập':
+      case 'hóa đơn':
+        return Icons.school;
+      case 'thu nhập':
+      case 'lương':
+        return Icons.account_balance_wallet;
+      default:
+        return isExpense ? Icons.arrow_upward : Icons.arrow_downward;
     }
   }
 
-  IconData _getCategoryIcon(String category) {
-    switch (category) {
-      case 'Ăn uống': return Icons.restaurant;
-      case 'Mua sắm': return Icons.shopping_bag;
-      case 'Di chuyển': return Icons.directions_car;
-      case 'Giải trí': return Icons.sports_esports;
-      case 'Hóa đơn': return Icons.receipt;
-      case 'Thu nhập': return Icons.work;
-      default: return Icons.category;
-    }
-  }
-
-  Color _getCategoryColor(String category) {
-    switch (category) {
-      case 'Ăn uống': return Colors.pink;
-      case 'Mua sắm': return Colors.cyan;
-      case 'Di chuyển': return Colors.deepPurple;
-      case 'Giải trí': return Colors.orange;
-      case 'Hóa đơn': return Colors.redAccent;
-      case 'Thu nhập': return Colors.green;
-      default: return Colors.blue;
+  Color _getCategoryColor(String category, bool isExpense) {
+    switch (category.toLowerCase()) {
+      case 'ăn uống':
+        return Colors.orange;
+      case 'mua sắm':
+        return Colors.pink;
+      case 'đi lại':
+        return Colors.purple;
+      case 'học tập':
+      case 'hóa đơn':
+        return Colors.blue;
+      default:
+        return isExpense ? Colors.red : Colors.green;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Lọc danh sách dựa trên nút được chọn
-    List<Transaction> filteredList = _allTransactions;
-    if (_selectedFilter == 'income') {
-      filteredList = _allTransactions.where((t) => t.type == 'income').toList();
-    } else if (_selectedFilter == 'expense') {
-      filteredList = _allTransactions.where((t) => t.type == 'expense').toList();
-    }
+    final displayList = _filteredTransactions;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Giao dịch', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: _isSearching
+            ? TextField(
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Tìm tên hoặc danh mục...',
+            border: InputBorder.none,
+          ),
+          onChanged: (value) => setState(() => _searchQuery = value),
+        )
+            : const Text(
+          'Giao dịch',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Colors.white,
-        elevation: 0,
+        elevation: 0.5,
         actions: [
+          IconButton(
+            icon: Icon(_isSearching ? Icons.close : Icons.search, color: Colors.black),
+            onPressed: () {
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) _searchQuery = '';
+              });
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.filter_list, color: Colors.black),
             onPressed: () {
@@ -108,155 +146,123 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
       ),
       body: Column(
         children: [
-          // 1. Thanh tìm kiếm
+          // 3 nút chuyển đổi bộ lọc: Tất cả / Thu nhập / Chi tiêu
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Tìm kiếm giao dịch...',
-                hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
-                prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                filled: true,
-                fillColor: Colors.grey[100],
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30.0),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ),
-
-          // 2. Các nút bộ lọc nhanh có gắn sự kiện chuyển đổi trạng thái
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
             child: Row(
               children: [
-                Expanded(
-                  child: _selectedFilter == 'all'
-                      ? ElevatedButton(
-                    onPressed: () => setState(() => _selectedFilter = 'all'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                    child: const Text('Tất cả', style: TextStyle(color: Colors.white)),
-                  )
-                      : OutlinedButton(
-                    onPressed: () => setState(() => _selectedFilter = 'all'),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.grey.shade300),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                    child: const Text('Tất cả', style: TextStyle(color: Colors.black54)),
-                  ),
-                ),
+                _buildFilterButton('Tất cả', 'all'),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: _selectedFilter == 'income'
-                      ? ElevatedButton(
-                    onPressed: () => setState(() => _selectedFilter = 'income'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                    child: const Text('Thu nhập', style: TextStyle(color: Colors.white)),
-                  )
-                      : OutlinedButton(
-                    onPressed: () => setState(() => _selectedFilter = 'income'),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.grey.shade300),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                    child: const Text('Thu nhập', style: TextStyle(color: Colors.black54)),
-                  ),
-                ),
+                _buildFilterButton('Thu nhập', 'income'),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: _selectedFilter == 'expense'
-                      ? ElevatedButton(
-                    onPressed: () => setState(() => _selectedFilter = 'expense'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                    child: const Text('Chi tiêu', style: TextStyle(color: Colors.white)),
-                  )
-                      : OutlinedButton(
-                    onPressed: () => setState(() => _selectedFilter = 'expense'),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.grey.shade300),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                    child: const Text('Chi tiêu', style: TextStyle(color: Colors.black54)),
-                  ),
-                ),
+                _buildFilterButton('Chi tiêu', 'expense'),
               ],
             ),
           ),
-
-          // 3. Danh sách giao dịch hiển thị theo bộ lọc
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : filteredList.isEmpty
+                : displayList.isEmpty
                 ? const Center(
               child: Text(
                 'Không có giao dịch nào phù hợp.',
-                style: TextStyle(color: Colors.grey, fontSize: 14),
+                style: TextStyle(color: Colors.grey),
               ),
             )
-                : ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              itemCount: filteredList.length,
-              itemBuilder: (context, index) {
-                final item = filteredList[index];
-                final isIncome = item.type == 'income';
-                final categoryColor = _getCategoryColor(item.category);
+                : RefreshIndicator(
+              onRefresh: _loadTransactions,
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                itemCount: displayList.length,
+                itemBuilder: (context, index) {
+                  final item = displayList[index];
+                  final isExpense = item.type == 'expense';
+                  final iconColor = _getCategoryColor(item.category, isExpense);
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  elevation: 0,
-                  color: Colors.grey[50],
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: ListTile(
-                    onTap: () => _navigateToEdit(item),
-                    leading: CircleAvatar(
-                      backgroundColor: categoryColor.withOpacity(0.15),
-                      child: Icon(_getCategoryIcon(item.category), color: categoryColor),
-                    ),
-                    title: Text(
-                      item.title.isNotEmpty ? item.title : item.category,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                    subtitle: Text(
-                      '${item.category} • ${item.date}',
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${isIncome ? '+' : '-'}${item.amount.toStringAsFixed(0)} đ',
-                          style: TextStyle(
-                            color: isIncome ? Colors.green[700] : Colors.red[700],
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
+                  return GestureDetector(
+                    onTap: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => SuaGiaoDichScreen(transaction: item),
                         ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.chevron_right, color: Colors.grey, size: 18),
-                      ],
+                      );
+                      if (result == true) _loadTransactions();
+                    },
+                    child: TransactionTile(
+                      icon: _getCategoryIcon(item.category, isExpense),
+                      iconBgColor: iconColor,
+                      title: item.title,
+                      subtitle: '${item.category} • ${item.date}',
+                      amount: '${isExpense ? '-' : '+'}${_formatCurrency(item.amount)} đ',
+                      isExpense: isExpense,
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFilterButton(String label, String filterValue) {
+    final isSelected = _selectedFilter == filterValue;
+    return Expanded(
+      child: isSelected
+          ? ElevatedButton(
+        onPressed: () => setState(() => _selectedFilter = filterValue),
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+        child: Text(label, style: const TextStyle(color: Colors.white)),
+      )
+          : OutlinedButton(
+        onPressed: () => setState(() => _selectedFilter = filterValue),
+        child: Text(label, style: const TextStyle(color: Colors.black)),
+      ),
+    );
+  }
+}
+
+class TransactionTile extends StatelessWidget {
+  final IconData icon;
+  final Color iconBgColor;
+  final String title;
+  final String subtitle;
+  final String amount;
+  final bool isExpense;
+
+  const TransactionTile({
+    super.key,
+    required this.icon,
+    required this.iconBgColor,
+    required this.title,
+    required this.subtitle,
+    required this.amount,
+    required this.isExpense,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      elevation: 0.5,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: iconBgColor.withOpacity(0.15),
+          child: Icon(icon, color: iconBgColor),
+        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        trailing: Text(
+          amount,
+          style: TextStyle(
+            color: isExpense ? Colors.red : Colors.green,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
       ),
     );
   }

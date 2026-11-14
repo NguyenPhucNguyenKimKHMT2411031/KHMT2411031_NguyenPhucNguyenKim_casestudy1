@@ -1,21 +1,67 @@
 import 'package:flutter/material.dart';
 
 class FilterScreen extends StatefulWidget {
-  const FilterScreen({Key? key}) : super(key: key);
+  final String initialType;
+  final String initialCategory;
+  final String initialTime;
+
+  const FilterScreen({
+    super.key,
+    this.initialType = 'all',
+    this.initialCategory = 'Tất cả danh mục',
+    this.initialTime = 'Tất cả thời gian',
+  });
 
   @override
   State<FilterScreen> createState() => _FilterScreenState();
 }
 
 class _FilterScreenState extends State<FilterScreen> {
-  bool isAll = true;
-  bool isIncome = false;
-  bool isExpense = false;
-  String selectedTime = 'Hôm nay';
+  late String _selectedType;
+  late String _selectedCategory;
+  late String _selectedTime;
+  DateTimeRange? _customDateRange;
+
+  final List<String> _categories = [
+    'Tất cả danh mục',
+    'Ăn uống',
+    'Mua sắm',
+    'Đi lại',
+    'Học tập',
+    'Hóa đơn',
+    'Thu nhập',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedType = widget.initialType;
+    _selectedCategory = _categories.contains(widget.initialCategory)
+        ? widget.initialCategory
+        : 'Tất cả danh mục';
+    _selectedTime = widget.initialTime;
+  }
+
+  // Mở hộp thoại chọn khoảng ngày khi chọn "Tùy chỉnh"
+  Future<void> _pickDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      initialDateRange: _customDateRange,
+    );
+    if (picked != null) {
+      setState(() {
+        _customDateRange = picked;
+        _selectedTime = 'Tùy chỉnh';
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
@@ -24,66 +70,119 @@ class _FilterScreenState extends State<FilterScreen> {
         title: const Text('Bộ lọc', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _selectedType = 'all';
+                _selectedCategory = 'Tất cả danh mục';
+                _selectedTime = 'Tất cả thời gian';
+                _customDateRange = null;
+              });
+            },
+            child: const Text('Đặt lại', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Lọc theo loại giao dịch
             const Text('Loại giao dịch', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            CheckboxListTile(
+            RadioListTile<String>(
               title: const Text('Tất cả'),
-              value: isAll,
-              onChanged: (val) => setState(() => isAll = val!),
+              value: 'all',
+              groupValue: _selectedType,
+              onChanged: (val) => setState(() => _selectedType = val!),
               contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
             ),
-            CheckboxListTile(
+            RadioListTile<String>(
               title: const Text('Thu nhập'),
-              value: isIncome,
-              onChanged: (val) => setState(() => isIncome = val!),
+              value: 'income',
+              groupValue: _selectedType,
+              onChanged: (val) => setState(() => _selectedType = val!),
               contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
             ),
-            CheckboxListTile(
+            RadioListTile<String>(
               title: const Text('Chi tiêu'),
-              value: isExpense,
-              onChanged: (val) => setState(() => isExpense = val!),
+              value: 'expense',
+              groupValue: _selectedType,
+              onChanged: (val) => setState(() => _selectedType = val!),
               contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
             ),
             const SizedBox(height: 12),
-            // Lọc theo danh mục
+
             const Text('Danh mục', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: 'Tất cả danh mục',
+              value: _selectedCategory,
               decoration: InputDecoration(
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               ),
-              items: const [
-                DropdownMenuItem(value: 'Tất cả danh mục', child: Text('Tất cả danh mục')),
-                DropdownMenuItem(value: 'Ăn uống', child: Text('Ăn uống')),
-                DropdownMenuItem(value: 'Mua sắm', child: Text('Mua sắm')),
-              ],
-              onChanged: (val) {},
+              items: _categories
+                  .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) setState(() => _selectedCategory = val);
+              },
             ),
             const SizedBox(height: 16),
-            // Lọc theo khoảng thời gian
+
             const Text('Khoảng thời gian', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            RadioListTile<String>(title: const Text('Hôm nay'), value: 'Hôm nay', groupValue: selectedTime, onChanged: (val) => setState(() => selectedTime = val!), contentPadding: EdgeInsets.zero),
-            RadioListTile<String>(title: const Text('7 ngày qua'), value: '7 ngày qua', groupValue: selectedTime, onChanged: (val) => setState(() => selectedTime = val!), contentPadding: EdgeInsets.zero),
-            RadioListTile<String>(title: const Text('Tháng này'), value: 'Tháng này', groupValue: selectedTime, onChanged: (val) => setState(() => selectedTime = val!), contentPadding: EdgeInsets.zero),
-            RadioListTile<String>(title: const Text('Tùy chỉnh'), value: 'Tùy chỉnh', groupValue: selectedTime, onChanged: (val) => setState(() => selectedTime = val!), contentPadding: EdgeInsets.zero),
-            const Spacer(),
-            // Nút áp dụng bộ lọc
+            RadioListTile<String>(
+              title: const Text('Tất cả thời gian'),
+              value: 'Tất cả thời gian',
+              groupValue: _selectedTime,
+              onChanged: (val) => setState(() => _selectedTime = val!),
+              contentPadding: EdgeInsets.zero,
+            ),
+            RadioListTile<String>(
+              title: const Text('Hôm nay'),
+              value: 'Hôm nay',
+              groupValue: _selectedTime,
+              onChanged: (val) => setState(() => _selectedTime = val!),
+              contentPadding: EdgeInsets.zero,
+            ),
+            RadioListTile<String>(
+              title: const Text('7 ngày qua'),
+              value: '7 ngày qua',
+              groupValue: _selectedTime,
+              onChanged: (val) => setState(() => _selectedTime = val!),
+              contentPadding: EdgeInsets.zero,
+            ),
+            RadioListTile<String>(
+              title: const Text('Tháng này'),
+              value: 'Tháng này',
+              groupValue: _selectedTime,
+              onChanged: (val) => setState(() => _selectedTime = val!),
+              contentPadding: EdgeInsets.zero,
+            ),
+            RadioListTile<String>(
+              title: Text(
+                _customDateRange == null
+                    ? 'Tùy chỉnh'
+                    : 'Tùy chỉnh (${_customDateRange!.start.day}/${_customDateRange!.start.month} - ${_customDateRange!.end.day}/${_customDateRange!.end.month})',
+              ),
+              value: 'Tùy chỉnh',
+              groupValue: _selectedTime,
+              onChanged: (val) => _pickDateRange(),
+              contentPadding: EdgeInsets.zero,
+            ),
+            const SizedBox(height: 24),
+
             SizedBox(
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  Navigator.pop(context, {
+                    'type': _selectedType,
+                    'category': _selectedCategory,
+                    'time': _selectedTime,
+                  });
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

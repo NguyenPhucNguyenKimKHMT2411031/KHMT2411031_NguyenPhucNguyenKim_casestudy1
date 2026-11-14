@@ -4,7 +4,7 @@ import 'models/transaction.dart';
 import 'repositories/transaction_repository.dart';
 
 class StatisticsScreen extends StatefulWidget {
-  const StatisticsScreen({Key? key}) : super(key: key);
+  const StatisticsScreen({super.key});
 
   @override
   State<StatisticsScreen> createState() => _StatisticsScreenState();
@@ -12,258 +12,236 @@ class StatisticsScreen extends StatefulWidget {
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
   final TransactionRepository _repository = TransactionRepository();
-
+  List<Transaction> _allTransactions = [];
   bool _isLoading = true;
-  List<Transaction> _allExpenseTransactions = [];
-  List<Transaction> _filteredTransactions = [];
-
-  double _totalExpense = 0;
-  Map<String, double> _categoryExpenses = {};
-
-  int _selectedFilterIndex = 0;
+  String _selectedPeriod = 'Tất cả';
 
   @override
   void initState() {
     super.initState();
-    _loadStatisticsData();
+    _loadData();
   }
 
-  Future<void> _loadStatisticsData() async {
+  String _formatCurrency(double amount) {
+    String str = amount.toStringAsFixed(0);
+    return str.replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]}.',
+    );
+  }
+
+  Future<void> _loadData() async {
     setState(() => _isLoading = true);
-
     try {
-      final allTransactions = await _repository.getTransactions();
-      _allExpenseTransactions = allTransactions.where((t) => t.type == 'expense').toList();
-      _applyTimeFilter(_selectedFilterIndex);
-
+      final list = await _repository.getTransactions();
       if (mounted) {
         setState(() {
-          _isLoading = false;
+          _allTransactions = list;
         });
       }
     } catch (e) {
       debugPrint("Lỗi tải thống kê: $e");
+    } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
   }
 
-  void _applyTimeFilter(int index) {
-    setState(() {
-      _selectedFilterIndex = index;
-      final now = DateTime.now();
+  // Lọc các khoản chi tiêu theo khoảng thời gian đang chọn
+  List<Transaction> get _filteredExpenses {
+    final now = DateTime.now();
+    return _allTransactions.where((item) {
+      if (item.type != 'expense') return false;
+      if (_selectedPeriod == 'Tất cả') return true;
 
-      _filteredTransactions = _allExpenseTransactions.where((t) {
-        try {
-          List<String> parts = t.date.split('/');
-          if (parts.length == 3) {
-            int day = int.parse(parts[0]);
-            int month = int.parse(parts[1]);
-            int year = int.parse(parts[2]);
-            DateTime tDate = DateTime(year, month, day);
+      // Parse chuỗi ngày dd/MM/yyyy
+      final parts = item.date.split('/');
+      if (parts.length != 3) return true;
+      final month = int.tryParse(parts[1]) ?? now.month;
+      final year = int.tryParse(parts[2]) ?? now.year;
 
-            if (index == 0) {
-              return tDate.year == now.year && tDate.month == now.month;
-            } else if (index == 1) {
-              int targetMonth = now.month == 1 ? 12 : now.month - 1;
-              int targetYear = now.month == 1 ? now.year - 1 : now.year;
-              return tDate.year == targetYear && tDate.month == targetMonth;
-            } else if (index == 2) {
-              return tDate.year == now.year;
-            }
-          }
-        } catch (_) {}
-        return true;
-      }).toList();
-
-      double total = 0;
-      Map<String, double> categoryMap = {};
-
-      for (var item in _filteredTransactions) {
-        total += item.amount;
-        categoryMap[item.category] = (categoryMap[item.category] ?? 0) + item.amount;
+      if (_selectedPeriod == 'Tháng này') {
+        return month == now.month && year == now.year;
+      } else if (_selectedPeriod == 'Tháng trước') {
+        final prevMonth = now.month == 1 ? 12 : now.month - 1;
+        final prevYear = now.month == 1 ? now.year - 1 : now.year;
+        return month == prevMonth && year == prevYear;
       }
-
-      _totalExpense = total;
-      _categoryExpenses = categoryMap;
-    });
+      return true;
+    }).toList();
   }
 
   Color _getCategoryColor(String category) {
-    switch (category) {
-      case 'Ăn uống':
-        return const Color(0xFFEF5350);
-      case 'Hóa đơn':
-        return const Color(0xFF42A5F5);
-      case 'Mua sắm':
-        return const Color(0xFFFFB74D);
-      case 'Di chuyển':
-        return const Color(0xFFAB47BC);
-      case 'Học tập':
-        return const Color(0xFF26A69A);
+    switch (category.toLowerCase()) {
+      case 'ăn uống':
+        return Colors.red;
+      case 'mua sắm':
+        return Colors.orange;
+      case 'di chuyển':
+      case 'đi lại':
+        return Colors.purple;
+      case 'hóa đơn':
+      case 'học tập':
+        return Colors.blue;
+      case 'giải trí':
+        return Colors.teal;
       default:
-        return const Color(0xFF7E57C2);
+        return Colors.indigo;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final expenses = _filteredExpenses;
+    final double totalExpense = expenses.fold(0, (sum, t) => sum + t.amount);
+
+    // Gom nhóm tổng tiền theo từng danh mục
+    final Map<String, double> categoryTotals = {};
+    for (var item in expenses) {
+      categoryTotals[item.category] = (categoryTotals[item.category] ?? 0) + item.amount;
+    }
+
+    // Sắp xếp danh mục từ chi nhiều nhất đến ít nhất
+    final sortedCategories = categoryTotals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('Thống kê', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
-        elevation: 0,
-        automaticallyImplyLeading: false,
+        elevation: 0.5,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(child: _buildFilterButton('Tháng này', 0)),
-                const SizedBox(width: 8),
-                Expanded(child: _buildFilterButton('Tháng trước', 1)),
-                const SizedBox(width: 8),
-                Expanded(child: _buildFilterButton('Năm nay', 2)),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Container(
-              height: 200,
-              alignment: Alignment.center,
-              child: Stack(
+          : RefreshIndicator(
+        onRefresh: _loadData,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              // 3 nút chọn khoảng thời gian thống kê
+              Row(
+                children: [
+                  _buildPeriodButton('Tất cả'),
+                  const SizedBox(width: 8),
+                  _buildPeriodButton('Tháng này'),
+                  const SizedBox(width: 8),
+                  _buildPeriodButton('Tháng trước'),
+                ],
+              ),
+              const SizedBox(height: 30),
+
+              // Biểu đồ vòng tròn đa sắc theo tỷ lệ từng danh mục
+              Stack(
                 alignment: Alignment.center,
                 children: [
                   SizedBox(
-                    width: 180,
-                    height: 180,
+                    height: 190,
+                    width: 190,
                     child: CustomPaint(
-                      painter: DonutChartPainter(
-                        categoryExpenses: _categoryExpenses,
-                        totalExpense: _totalExpense,
-                        getColor: _getCategoryColor,
+                      painter: _DonutChartPainter(
+                        categories: sortedCategories,
+                        total: totalExpense,
+                        colorMapper: _getCategoryColor,
                       ),
                     ),
                   ),
                   Column(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('Tổng chi tiêu', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      const Text('Tổng chi tiêu', style: TextStyle(fontSize: 12, color: Colors.grey)),
                       const SizedBox(height: 4),
                       Text(
-                        '${_totalExpense.toStringAsFixed(0)} đ',
+                        '${_formatCurrency(totalExpense)} đ',
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                     ],
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 24),
-            _categoryExpenses.isEmpty
-                ? const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32.0),
-              child: Text('Không có dữ liệu chi tiêu trong khoảng thời gian này', style: TextStyle(color: Colors.grey)),
-            )
-                : ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _categoryExpenses.keys.length,
-              itemBuilder: (context, index) {
-                String category = _categoryExpenses.keys.elementAt(index);
-                double amount = _categoryExpenses[category]!;
-                double percentage = _totalExpense > 0 ? (amount / _totalExpense) * 100 : 0;
-                Color color = _getCategoryColor(category);
+              const SizedBox(height: 30),
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16.0),
-                  child: Row(
-                    children: [
-                      Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(category, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
-                      ),
-                      Text(
-                        '${amount.toStringAsFixed(0)} đ',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                      ),
-                      const SizedBox(width: 16),
-                      SizedBox(
-                        width: 45,
-                        child: Text(
-                          '${percentage.toStringAsFixed(0)}%',
-                          textAlign: TextAlign.end,
-                          style: const TextStyle(color: Colors.grey, fontSize: 13),
-                        ),
-                      ),
-                    ],
+              // Danh sách chi tiết các danh mục cấu thành
+              if (sortedCategories.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Text(
+                    'Chưa có dữ liệu chi tiêu trong khoảng thời gian này.',
+                    style: TextStyle(color: Colors.grey),
                   ),
-                );
-              },
-            ),
-          ],
+                )
+              else
+                ...sortedCategories.map((entry) {
+                  final percent = totalExpense > 0 ? (entry.value / totalExpense * 100) : 0;
+                  return CategoryStatTile(
+                    color: _getCategoryColor(entry.key),
+                    title: entry.key,
+                    amount: '${_formatCurrency(entry.value)} đ',
+                    percent: '${percent.toStringAsFixed(0)}%',
+                  );
+                }),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildFilterButton(String title, int index) {
-    bool isSelected = _selectedFilterIndex == index;
-    return OutlinedButton(
-      onPressed: () => _applyTimeFilter(index),
-      style: OutlinedButton.styleFrom(
-        backgroundColor: isSelected ? Colors.blue : Colors.white,
-        side: BorderSide(color: isSelected ? Colors.blue : Colors.grey.shade300),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      ),
-      child: Text(
-        title,
-        style: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontSize: 13),
+  Widget _buildPeriodButton(String label) {
+    final isSelected = _selectedPeriod == label;
+    return Expanded(
+      child: isSelected
+          ? ElevatedButton(
+        onPressed: () => setState(() => _selectedPeriod = label),
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 13)),
+      )
+          : OutlinedButton(
+        onPressed: () => setState(() => _selectedPeriod = label),
+        child: Text(label, style: const TextStyle(color: Colors.black, fontSize: 13)),
       ),
     );
   }
 }
 
-class DonutChartPainter extends CustomPainter {
-  final Map<String, double> categoryExpenses;
-  final double totalExpense;
-  final Color Function(String) getColor;
+// Vẽ biểu đồ Donut chart từ dữ liệu thực tế
+class _DonutChartPainter extends CustomPainter {
+  final List<MapEntry<String, double>> categories;
+  final double total;
+  final Color Function(String) colorMapper;
 
-  DonutChartPainter({
-    required this.categoryExpenses,
-    required this.totalExpense,
-    required this.getColor,
+  _DonutChartPainter({
+    required this.categories,
+    required this.total,
+    required this.colorMapper,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 12;
+    final radius = min(size.width, size.height) / 2 - 14;
+    const strokeWidth = 26.0;
 
-    if (totalExpense == 0 || categoryExpenses.isEmpty) {
-      final defaultPaint = Paint()
-        ..color = Colors.grey.shade300
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 22.0;
-      canvas.drawCircle(center, radius, defaultPaint);
+    final bgPaint = Paint()
+      ..color = Colors.grey.shade200
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    if (total <= 0 || categories.isEmpty) {
+      canvas.drawCircle(center, radius, bgPaint);
       return;
     }
 
     double startAngle = -pi / 2;
-
-    categoryExpenses.forEach((category, amount) {
-      final sweepAngle = (amount / totalExpense) * 2 * pi;
+    for (var entry in categories) {
+      final sweepAngle = (entry.value / total) * 2 * pi;
       final paint = Paint()
-        ..color = getColor(category)
+        ..color = colorMapper(entry.key)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 22.0
-        ..strokeCap = StrokeCap.butt;
+        ..strokeWidth = strokeWidth;
 
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: radius),
@@ -272,11 +250,46 @@ class DonutChartPainter extends CustomPainter {
         false,
         paint,
       );
-
       startAngle += sweepAngle;
-    });
+    }
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class CategoryStatTile extends StatelessWidget {
+  final Color color;
+  final String title;
+  final String amount;
+  final String percent;
+
+  const CategoryStatTile({
+    super.key,
+    required this.color,
+    required this.title,
+    required this.amount,
+    required this.percent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10.0),
+      child: Row(
+        children: [
+          Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 12),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
+          const Spacer(),
+          Text(amount, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          const SizedBox(width: 16),
+          SizedBox(
+            width: 40,
+            child: Text(percent, textAlign: TextAlign.right, style: const TextStyle(color: Colors.grey)),
+          ),
+        ],
+      ),
+    );
+  }
 }
