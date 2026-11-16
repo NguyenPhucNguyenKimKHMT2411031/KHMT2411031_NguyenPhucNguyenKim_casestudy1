@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dashboard_screen.dart';
+import 'main_navigation.dart';
 
 void main() async {
   // Khởi tạo binding trước khi chạy các tác vụ bất đồng bộ SQLite
@@ -7,6 +7,6 @@ void main() async {
 
   runApp(const MaterialApp(
     debugShowCheckedModeBanner: false,
-    home: DashboardScreen(),
+    home: MainNavigation(),
   ));
 }
