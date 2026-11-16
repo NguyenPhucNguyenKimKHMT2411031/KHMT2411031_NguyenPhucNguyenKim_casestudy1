@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'main_navigation.dart'; // Chuyển hướng trực tiếp đến khung điều hướng chính chứa thanh menu
+import 'main_navigation.dart';
 
 class WelcomeScreen extends StatelessWidget {
-  const WelcomeScreen({Key? key}) : super(key: key);
+  const WelcomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -15,7 +15,6 @@ class WelcomeScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Spacer(),
-              // Biểu tượng / Logo ví tiền giống thiết kế mẫu
               Container(
                 width: 120,
                 height: 120,
@@ -30,8 +29,6 @@ class WelcomeScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 32),
-
-              // Tên ứng dụng
               const Text(
                 'Expense Manager',
                 style: TextStyle(
@@ -41,8 +38,6 @@ class WelcomeScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-
-              // Khẩu hiệu mô tả
               const Text(
                 'Quản lý chi tiêu cá nhân\nđơn giản và hiệu quả',
                 textAlign: TextAlign.center,
@@ -53,8 +48,6 @@ class WelcomeScreen extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-
-              // Nút Bắt đầu
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -67,7 +60,6 @@ class WelcomeScreen extends StatelessWidget {
                     ),
                   ),
                   onPressed: () {
-                    // Chuyển hướng sang MainNavigation để giữ nguyên thanh menu phía dưới
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
