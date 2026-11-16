@@ -16,13 +16,43 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final TransactionRepository _repository = TransactionRepository();
 
-  List<Transaction> _transactions = [];
+  List _transactions = [];
   bool _isLoading = true;
-  bool _isBalanceVisible = true; // Bật/tắt ẩn hiện số dư khi bấm icon con mắt
+  bool _isBalanceVisible = true;
 
   double _totalIncome = 0;
   double _totalExpense = 0;
   double _balance = 0;
+
+  final List _notifications = [
+    {
+      'title': 'Nhắc nhở ghi chép chi tiêu',
+      'body': 'Đừng quên cập nhật các khoản chi tiêu hôm nay của bạn nhé!',
+      'time': '10 phút trước',
+      'isRead': false,
+      'icon': Icons.edit_calendar,
+      'color': Colors.blue,
+    },
+    {
+      'title': 'Cảnh báo hạn mức tháng',
+      'body': 'Chi tiêu của bạn đang được theo dõi chặt chẽ theo ngân sách 5.000.000 đ.',
+      'time': '2 giờ trước',
+      'isRead': false,
+      'icon': Icons.warning_amber_rounded,
+      'color': Colors.orange,
+    },
+    {
+      'title': 'Sao lưu dữ liệu định kỳ',
+      'body': 'Cơ sở dữ liệu SQLite cục bộ đã sẵn sàng để sao lưu bất cứ lúc nào.',
+      'time': 'Hôm qua',
+      'isRead': false,
+      'icon': Icons.cloud_done_outlined,
+      'color': Colors.green,
+    },
+  ];
+
+  int get _unreadCount =>
+      _notifications.where((item) => item['isRead'] == false).length;
 
   @override
   void initState() {
@@ -30,7 +60,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _loadTransactions();
   }
 
-  // Hàm định dạng số tiền có dấu chấm ngăn cách hàng nghìn
   String _formatCurrency(double amount) {
     String str = amount.toStringAsFixed(0);
     return str.replaceAllMapped(
@@ -39,7 +68,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Tải danh sách giao dịch từ Repository và tính toán số dư
   Future<void> _loadTransactions() async {
     setState(() => _isLoading = true);
 
@@ -73,13 +101,117 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // Điều hướng màn hình và luôn cập nhật lại dữ liệu khi quay về
   Future<void> _navigateTo(Widget screen) async {
     await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => screen),
     );
     _loadTransactions();
+  }
+
+  void _showNotificationsBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Thông báo',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  if (_unreadCount > 0)
+                    TextButton(
+                      onPressed: () {
+                        setSheetState(() {
+                          for (var n in _notifications) {
+                            n['isRead'] = true;
+                          }
+                        });
+                        setState(() {});
+                      },
+                      child: const Text('Đánh dấu tất cả đã đọc'),
+                    ),
+                ],
+              ),
+              const Divider(),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _notifications.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final item = _notifications[index];
+                    final bool isRead = item['isRead'];
+                    final Color itemColor = item['color'];
+
+                    return ListTile(
+                      tileColor: isRead ? Colors.transparent : Colors.blue.withOpacity(0.05),
+                      leading: CircleAvatar(
+                        backgroundColor: itemColor.withOpacity(0.15),
+                        child: Icon(item['icon'], color: itemColor, size: 22),
+                      ),
+                      title: Text(
+                        item['title'],
+                        style: TextStyle(
+                          fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 4),
+                          Text(item['body'], style: const TextStyle(fontSize: 12)),
+                          const SizedBox(height: 4),
+                          Text(
+                            item['time'],
+                            style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                      trailing: !isRead
+                          ? Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.blue,
+                          shape: BoxShape.circle,
+                        ),
+                      )
+                          : null,
+                      onTap: () {
+                        setSheetState(() {
+                          item['isRead'] = true;
+                        });
+                        setState(() {});
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -95,7 +227,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         title: const Text(
           'Quản lý thu chi',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
         ),
         centerTitle: true,
         actions: [
@@ -103,24 +239,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.notifications_none, color: Colors.black),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Bạn có 3 thông báo nhắc nhở chi tiêu hôm nay!')),
-                  );
-                },
+                onPressed: _showNotificationsBottomSheet,
               ),
-              Positioned(
-                right: 8,
-                top: 8,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                  child: const Text(
-                    '3',
-                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+              if (_unreadCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '$_unreadCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
         ],
@@ -141,10 +281,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Giao dịch gần đây', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Giao dịch gần đây',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   TextButton(
-                    onPressed: () => _navigateTo(const TransactionListScreen()),
-                    child: const Text('Xem tất cả', style: TextStyle(color: Colors.blue)),
+                    onPressed: () =>
+                        _navigateTo(const TransactionListScreen()),
+                    child: const Text(
+                      'Xem tất cả',
+                      style: TextStyle(color: Colors.blue),
+                    ),
                   ),
                 ],
               ),
@@ -184,13 +334,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   GestureDetector(
-                    onTap: () => setState(() => _isBalanceVisible = !_isBalanceVisible),
+                    onTap: () =>
+                        setState(() => _isBalanceVisible = !_isBalanceVisible),
                     child: Row(
                       children: [
-                        const Text('SỐ DƯ HIỆN TẠI', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                        const Text(
+                          'SỐ DƯ HIỆN TẠI',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         const SizedBox(width: 6),
                         Icon(
-                          _isBalanceVisible ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          _isBalanceVisible
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
                           color: Colors.white70,
                           size: 16,
                         ),
@@ -199,23 +359,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _isBalanceVisible ? '${_formatCurrency(_balance)} đ' : '•••••••• đ',
-                    style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold),
+                    _isBalanceVisible
+                        ? '${_formatCurrency(_balance)} đ'
+                        : '•••••••• đ',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
-              const Icon(Icons.account_balance_wallet, color: Colors.white, size: 56),
+              const Icon(
+                Icons.account_balance_wallet,
+                color: Colors.white,
+                size: 56,
+              ),
             ],
           ),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.white38, shape: BoxShape.circle)),
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: Colors.white38,
+                  shape: BoxShape.circle,
+                ),
+              ),
               const SizedBox(width: 4),
-              Container(width: 16, height: 6, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(3))),
+              Container(
+                width: 16,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
               const SizedBox(width: 4),
-              Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.white38, shape: BoxShape.circle)),
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: Colors.white38,
+                  shape: BoxShape.circle,
+                ),
+              ),
             ],
           ),
         ],
@@ -229,20 +420,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Expanded(
           child: Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFFEEF9F1), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEEF9F1),
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Row(
               children: [
-                CircleAvatar(backgroundColor: Colors.green.shade100, child: const Icon(Icons.arrow_downward, color: Colors.green)),
+                CircleAvatar(
+                  backgroundColor: Colors.green.shade100,
+                  child: const Icon(Icons.arrow_downward, color: Colors.green),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('TỔNG THU NHẬP', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                      const Text(
+                        'TỔNG THU NHẬP',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         '${_formatCurrency(_totalIncome)} đ',
-                        style: const TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
@@ -255,20 +463,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Expanded(
           child: Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFFFDEEEE), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFDEEEE),
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Row(
               children: [
-                CircleAvatar(backgroundColor: Colors.red.shade100, child: const Icon(Icons.arrow_upward, color: Colors.red)),
+                CircleAvatar(
+                  backgroundColor: Colors.red.shade100,
+                  child: const Icon(Icons.arrow_upward, color: Colors.red),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('TỔNG CHI TIÊU', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                      const Text(
+                        'TỔNG CHI TIÊU',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         '${_formatCurrency(_totalExpense)} đ',
-                        style: const TextStyle(fontSize: 13, color: Colors.red, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
@@ -304,18 +529,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: ListTile(
             onTap: () => _navigateTo(SuaGiaoDichScreen(transaction: item)),
             leading: CircleAvatar(
-              backgroundColor: isIncome ? Colors.green.shade100 : Colors.red.shade100,
+              backgroundColor:
+              isIncome ? Colors.green.shade100 : Colors.red.shade100,
               child: Icon(
                 isIncome ? Icons.arrow_downward : Icons.arrow_upward,
                 color: isIncome ? Colors.green : Colors.red,
               ),
             ),
-            title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            subtitle: Text('${item.category}   ${item.date}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            title: Text(
+              item.title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            subtitle: Text(
+              '${item.category}   ${item.date}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
             trailing: Text(
               '${isIncome ? '+' : '-'}${_formatCurrency(item.amount)} đ',
               style: TextStyle(
