@@ -3,6 +3,8 @@ import 'models/transaction.dart';
 import 'repositories/transaction_repository.dart';
 import 'them_giao_dich_screen.dart';
 import 'sua_giao_dich_screen.dart';
+import 'danh_sach_giao_dich_screen.dart';
+import 'man_hinh_ca_nhan_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -14,9 +16,9 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final TransactionRepository _repository = TransactionRepository();
 
-  int _selectedIndex = 0;
   List<Transaction> _transactions = [];
   bool _isLoading = true;
+  bool _isBalanceVisible = true; // Bật/tắt ẩn hiện số dư khi bấm icon con mắt
 
   double _totalIncome = 0;
   double _totalExpense = 0;
@@ -28,15 +30,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _loadTransactions();
   }
 
+  // Hàm định dạng số tiền có dấu chấm ngăn cách hàng nghìn
+  String _formatCurrency(double amount) {
+    String str = amount.toStringAsFixed(0);
+    return str.replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]}.',
+    );
+  }
+
   // Tải danh sách giao dịch từ Repository và tính toán số dư
   Future<void> _loadTransactions() async {
     setState(() => _isLoading = true);
 
     try {
-      // Đọc danh sách Transaction từ Repository
       final loadedList = await _repository.getTransactions();
 
-      // Tính tổng thu, tổng chi dựa trên thuộc tính 'type'
       double income = loadedList
           .where((t) => t.type == 'income')
           .fold(0, (sum, t) => sum + t.amount);
@@ -56,7 +65,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       debugPrint("Lỗi tải dữ liệu SQLite: $e");
     } finally {
-      // Luôn luôn tắt vòng xoay tải dữ liệu kể cả khi xảy ra lỗi
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -65,15 +73,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // Điều hướng màn hình và reload dữ liệu nếu có thay đổi
+  // Điều hướng màn hình và luôn cập nhật lại dữ liệu khi quay về
   Future<void> _navigateTo(Widget screen) async {
-    final result = await Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => screen),
     );
-    if (result == true) {
-      _loadTransactions();
-    }
+    _loadTransactions();
   }
 
   @override
@@ -85,7 +91,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.menu, color: Colors.black),
-          onPressed: () {},
+          onPressed: () => _navigateTo(const ProfileScreen()),
         ),
         title: const Text(
           'Quản lý thu chi',
@@ -97,7 +103,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.notifications_none, color: Colors.black),
-                onPressed: () {},
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Bạn có 3 thông báo nhắc nhở chi tiêu hôm nay!')),
+                  );
+                },
               ),
               Positioned(
                 right: 8,
@@ -132,7 +142,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Giao dịch gần đây', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  TextButton(onPressed: () {}, child: const Text('Xem tất cả', style: TextStyle(color: Colors.blue))),
+                  TextButton(
+                    onPressed: () => _navigateTo(const TransactionListScreen()),
+                    child: const Text('Xem tất cả', style: TextStyle(color: Colors.blue)),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -146,17 +159,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: Colors.blue,
         shape: const CircleBorder(),
         child: const Icon(Icons.add, color: Colors.white, size: 28),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
-          BottomNavigationBarItem(icon: Icon(Icons.article_outlined), label: 'Giao dịch'),
-          BottomNavigationBarItem(icon: Icon(Icons.pie_chart_outline), label: 'Thống kê'),
-        ],
       ),
     );
   }
@@ -181,16 +183,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: const [
-                      Text('SỐ DƯ HIỆN TẠI', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
-                      SizedBox(width: 6),
-                      Icon(Icons.visibility_outlined, color: Colors.white70, size: 16),
-                    ],
+                  GestureDetector(
+                    onTap: () => setState(() => _isBalanceVisible = !_isBalanceVisible),
+                    child: Row(
+                      children: [
+                        const Text('SỐ DƯ HIỆN TẠI', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 6),
+                        Icon(
+                          _isBalanceVisible ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          color: Colors.white70,
+                          size: 16,
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${_balance.toStringAsFixed(0)} đ',
+                    _isBalanceVisible ? '${_formatCurrency(_balance)} đ' : '•••••••• đ',
                     style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -232,7 +241,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const Text('TỔNG THU NHẬP', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
                       Text(
-                        '${_totalIncome.toStringAsFixed(0)} đ',
+                        '${_formatCurrency(_totalIncome)} đ',
                         style: const TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.bold),
                       ),
                     ],
@@ -258,7 +267,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const Text('TỔNG CHI TIÊU', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
                       Text(
-                        '${_totalExpense.toStringAsFixed(0)} đ',
+                        '${_formatCurrency(_totalExpense)} đ',
                         style: const TextStyle(fontSize: 13, color: Colors.red, fontWeight: FontWeight.bold),
                       ),
                     ],
@@ -308,7 +317,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             subtitle: Text('${item.category}   ${item.date}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
             trailing: Text(
-              '${isIncome ? '+' : '-'}${item.amount.toStringAsFixed(0)} đ',
+              '${isIncome ? '+' : '-'}${_formatCurrency(item.amount)} đ',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
