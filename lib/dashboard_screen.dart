@@ -4,7 +4,6 @@ import 'repositories/transaction_repository.dart';
 import 'them_giao_dich_screen.dart';
 import 'sua_giao_dich_screen.dart';
 import 'danh_sach_giao_dich_screen.dart';
-import 'thong_ke_screen.dart';
 import 'man_hinh_ca_nhan_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -160,23 +159,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: Colors.blue,
         shape: const CircleBorder(),
         child: const Icon(Icons.add, color: Colors.white, size: 28),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        onTap: (index) {
-          if (index == 1) {
-            _navigateTo(const TransactionListScreen());
-          } else if (index == 2) {
-            _navigateTo(const StatisticsScreen());
-          }
-        },
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
-          BottomNavigationBarItem(icon: Icon(Icons.article_outlined), label: 'Giao dịch'),
-          BottomNavigationBarItem(icon: Icon(Icons.pie_chart_outline), label: 'Thống kê'),
-        ],
       ),
     );
   }
